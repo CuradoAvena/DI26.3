@@ -10,7 +10,28 @@ public class DetectorInteraccion : MonoBehaviour
 
     private void Update()
     {
+        // Si la UI está abierta y el jugador presiona Escape, cerramos la ficha
+        if (ManagerUI.Instancia.InterfazActiva && UnityEngine.InputSystem.Keyboard.current.escapeKey.wasPressedThisFrame)
+        {
+            ManagerUI.Instancia.CerrarFicha();
+            return;
+        }
+
+        // Si la UI está abierta, bloqueamos el resto de la lógica de detección
+        if (ManagerUI.Instancia.InterfazActiva) return;
+
         LanzarRaycast();
+
+        // Si estamos viendo un cuadro de cerca y presionamos la tecla E, abrimos su ficha técnica
+        if (_cuadroActual != null && UnityEngine.InputSystem.Keyboard.current.eKey.wasPressedThisFrame)
+        {
+            ManagerUI.Instancia.MostrarFicha(
+                _cuadroActual.NombreObra,
+                _cuadroActual.Autor,
+                _cuadroActual.Año,
+                _cuadroActual.Descripcion
+            );
+        }
     }
 
     private void LanzarRaycast()
