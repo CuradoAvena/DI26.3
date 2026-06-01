@@ -4,6 +4,14 @@ using UnityEngine;
 [RequireComponent(typeof(MeshRenderer))]
 public class CuadroMuseo : MonoBehaviour
 {
+
+    [SerializeField, TextArea(3, 5)] private string _descripcionObra = "Escribe aquí la historia o datos de la obra...";
+
+    // Creamos propiedades públicas (Getters) para que el ManagerUI pueda leer los datos de forma limpia
+    public string NombreObra => _nombreObra;
+    public string Autor => _autor;
+    public int Año => _año;
+    public string Descripcion => _descripcionObra;
     [Header("Información de la Obra")]
     [SerializeField] private string _nombreObra = "Sin Título";
     [SerializeField] private string _autor = "Anónimo";
