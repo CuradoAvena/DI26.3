@@ -1,0 +1,156 @@
+ public static ManagerTerminalUI Instancia { get; private set; }
+
+ [Header("Componentes de Pantalla Mínimos")]
+ [SerializeField] private GameObject _panelConsola;
+ [SerializeField] private TextMeshProUGUI _txtEstatus;
+ [SerializeField] private TMP_InputField _inputContraseña;
+
+ [Header("Lógica del Puzzle Global")]
+ [SerializeField] private float _voltajeRequerido = 1000f;
+ private float _voltajeActualAcumulado = 0f;
+
+ [Header("Lógica de la Trampa de Gas")]
+ [SerializeField] private GameObject _panelTimerMuerte; // Un texto grande en la pantalla del jugador
+ [SerializeField] private TextMeshProUGUI _txtTimer;
+
+ private float _tiempoRestanteGas;
+ private bool _cronometroActivo = false;
+ private Consola _consolaActualActiva;
+ private bool _pantallaAbierta = false;
+
+ public bool PantallaAbierta => _pantallaAbierta;
+
+ private void Awake()
+ {
+     if (Instancia == null) Instancia = this;
+     else Destroy(gameObject);
+ }
+
+ private void Update()
+ {
+     // Lógica del contador del Gas frame a frame
+     if (_cronometroActivo)
+     {
+         _tiempoRestanteGas -= Time.deltaTime;
+
+         // Formateamos el texto a un decimal (ej: 25.4)
+         _txtTimer.text = $"ALERTA: GAS EN {_tiempoRestanteGas:F1}s";
+
+         if (_tiempoRestanteGas <= 0f)
+         {
+             ProcesarMuertePorGas();
+         }
+     }
+ }
+
+ public void IniciarContrarrelojGas(float tiempo)
+ {
+     _tiempoRestanteGas = tiempo;
+     _cronometroActivo = true;
+     _panelTimerMuerte.SetActive(true); // Encendemos el reloj en el HUD del jugador
+ }
+
+ public void DetenerTemporizador()
+ {
+     _cronometroActivo = false;
+     _panelTimerMuerte.SetActive(false);
+     Debug.Log("<b>[SISTEMA]</b> Temporizador detenido a tiempo.");
+
+     TriggerTrampaGas trampa = UnityEngine.Object.FindFirstObjectByType<TriggerTrampaGas>();
+     if (trampa != null)
+     {
+         trampa.ApagarHumo(); // Le pedimos a la trampa que detenga el Shuriken
+     }
+
+     Debug.Log("<b>[SISTEMA]</b> Temporizador detenido y gas purificado con éxito.");
+ }
+
+ private void ProcesarMuertePorGas()
+ {
+     _cronometroActivo = false;
+     _txtTimer.text = "SISTEMA COLAPSADO";
+     Debug.LogError("<b>[GAME OVER]</b> El jugador se quedó sin aire.");
+     // NOTA: Aquí los alumnos pueden congelar el juego o recargar la escena
+ }
+
+ // --- LÓGICA DE HACKEO ANTERIOR ---
+ public void AbrirTerminal(Consola consola)
+ {
+     _consolaActualActiva = consola;
+     _pantallaAbierta = true;
+     _inputContraseña.text = "";
+
+     if (consola.YaHackeada)
+     {
+         _txtEstatus.text = $"SISTEMA ONLINE: {consola.Voltaje}V DISPARADOS.";
+         _inputContraseña.interactable = false;
+     }
+     else
+     {
+         _txtEstatus.text = "INGRESE CÓDIGO DE ACCESO:";
+         _inputContraseña.interactable = true;
+     }
+
+     _panelConsola.SetActive(true);
+     Time.timeScale = 0f;
+     Cursor.lockState = CursorLockMode.None;
+     Cursor.visible = true;
+     _inputContraseña.ActivateInputField();
+ }
+
+ public void ValidarCodigoIntroducido()
+ {
+     if (_consolaActualActiva == null || _consolaActualActiva.YaHackeada) return;
+
+     if (_inputContraseña.text == _consolaActualActiva.ContraseñaCorrecta)
+     {
+         _voltajeActualAcumulado += _consolaActualActiva.Voltaje;
+         _consolaActualActiva.MarcarComoHackeada();
+
+         // Si es la consola maestra y metió la clave correcta, desactivamos el gas
+         if (_consolaActualActiva.IdTerminal == "CONSOLA_MAESTRA")
+         {
+             DetenerTemporizador();
+         }
+
+         if (_voltajeActualAcumulado >= _voltajeRequerido)
+         {
+             PuertaGaleria puerta = UnityEngine.Object.FindFirstObjectByType<PuertaGaleria>();
+             if (puerta != null) puerta.AbrirCompuerta();
+         }
+
+         CerrarTerminal();
+     }
+     else
+     {
+         _txtEstatus.text = "❌ CÓDIGO ERRONEO. INTENTE DE NUEVO.";
+         _inputContraseña.text = "";
+         _inputContraseña.ActivateInputField();
+     }
+ }
+
+ public void CerrarTerminal()
+ {
+     _pantallaAbierta = false;
+     _panelConsola.SetActive(false);
+     _consolaActualActiva = null;
+     _inputContraseña.gameObject.SetActive(true);
+
+     Time.timeScale = 1f;
+     Cursor.lockState = CursorLockMode.Locked;
+     Cursor.visible = false;
+ }
+
+ // --- MÉTODO DEL TUTORIAL AUTOMÁTICO ANTERIOR ---
+ public void MostrarInstruccionesLobby(string mensaje)
+ {
+     _pantallaAbierta = true;
+     _txtEstatus.text = mensaje;
+     _inputContraseña.gameObject.SetActive(false);
+     _panelConsola.SetActive(true);
+
+     Time.timeScale = 0f;
+     Cursor.lockState = CursorLockMode.None;
+     Cursor.visible = true;
+ }
+
