@@ -3,74 +3,80 @@ using UnityEngine.InputSystem;
 public class DetectorInteraccion : MonoBehaviour
 {
     [Header("Configuración del Raycast")]
-    [SerializeField] private float _distanciaMaxima = 3.5f;
-    [SerializeField] private LayerMask _capaInteractuable;
+    [SerializeField] private Camera mainCamera;
+    [SerializeField] private LayerMask capasInteractuables;
+    [SerializeField] private float distanciaMaxima = 100f;
 
-    private CuadroMuseo _cuadroActual;
+    private Cuadro _cuadroActual;
 
-    private void Update()
+    void Update()
     {
-        // Si la UI está abierta y el jugador presiona Escape, cerramos la ficha
-        if (ManagerUI.Instancia.InterfazActiva && UnityEngine.InputSystem.Keyboard.current.escapeKey.wasPressedThisFrame)
+        // === SHORTCUT DE RETORNO (CLICK DERECHO) ===
+        // Si el mánager está inspeccionando un objeto en el centro de la pantalla...
+        if (InspectionManager.Instancia != null && InspectionManager.Instancia.EnModoInspeccion)
         {
-            ManagerUI.Instancia.CerrarFicha();
-            return;
+            // ...y el jugador presiona Click Derecho, cerramos la UI y devolvemos el cubo de golpe
+            if (UnityEngine.InputSystem.Mouse.current.rightButton.wasPressedThisFrame)
+            {
+                Debug.Log("<color=cyan>[Inspección]</color> Retorno rápido activado por Click Derecho.");
+                MuseumUIManager.Instancia.CerrarPanel(); // Esto apaga el panel e invoca el regreso automático
+            }
+            return; // Mantiene el escudo activo para que el Raycast no ensucie la selección
         }
 
-        // Si la UI está abierta, bloqueamos el resto de la lógica de detección
-        if (ManagerUI.Instancia.InterfazActiva) return;
+        // Si la UI de la ficha está abierta por el método tradicional, congelamos el resto del Raycast
+        if (MuseumUIManager.Instancia != null && MuseumUIManager.Instancia.InterfazActiva) return;
 
+        // Si no estamos inspeccionando, el buscador láser opera de forma normal (Hover)
         LanzarRaycast();
 
-        // Si estamos viendo un cuadro de cerca y presionamos la tecla E, abrimos su ficha técnica
+        // Detección de la tecla E para abrir la ficha técnica
         if (_cuadroActual != null && UnityEngine.InputSystem.Keyboard.current.eKey.wasPressedThisFrame)
         {
-            ManagerUI.Instancia.MostrarFicha(
-                _cuadroActual.NombreObra,
-                _cuadroActual.Autor,
-                _cuadroActual.Año,
-                _cuadroActual.Descripcion
-            );
+            Debug.Log("Objeto interactivo detectado en el museo.");
+            MuseumUIManager.Instancia.MostrarFicha(_cuadroActual);
         }
     }
 
-    private void LanzarRaycast()
+    void LanzarRaycast()
     {
-        Ray rayo = new Ray(transform.position, transform.forward);
-        RaycastHit infoChoque;
+        if (mainCamera == null) return;
 
-        if (Physics.Raycast(rayo, out infoChoque, _distanciaMaxima, _capaInteractuable))
+        // Proyectamos el rayo desde la posición del mouse
+        Ray rayo = mainCamera.ScreenPointToRay(UnityEngine.InputSystem.Mouse.current.position.ReadValue());
+        RaycastHit golpe;
+
+        if (Physics.Raycast(rayo, out golpe, distanciaMaxima, capasInteractuables))
         {
-            // Intentamos obtener el componente del cuadro con el que chocamos
-            CuadroMuseo nuevoCuadro = infoChoque.collider.GetComponent<CuadroMuseo>();
+            // Buscamos el componente correcto: Cuadro
+            Cuadro cuadro = golpe.collider.GetComponent<Cuadro>();
 
-            if (nuevoCuadro != null && nuevoCuadro != _cuadroActual)
+            if (cuadro != null)
             {
-                // Si estábamos viendo otro cuadro antes, le quitamos el color
-                if (_cuadroActual != null) _cuadroActual.QuitarMirada();
+                if (_cuadroActual != cuadro)
+                {
+                    if (_cuadroActual != null) _cuadroActual.QuitarMirada();
+                    _cuadroActual = cuadro;
+                    _cuadroActual.MirarCuadro();
+                    Debug.Log($"<color=yellow>[Raycast]</color> Objeto seleccionado: {golpe.collider.name}");
+                }
 
-                // Guardamos el nuevo cuadro y lo encendemos
-                _cuadroActual = nuevoCuadro;
-                _cuadroActual.MirarCuadro();
+                // Si el usuario hace click izquierdo, vuela al centro de la pantalla
+                if (UnityEngine.InputSystem.Mouse.current.leftButton.wasPressedThisFrame && InspectionManager.Instancia != null)
+                {
+                    MuseumUIManager.Instancia.CerrarPanel();
+                    InspectionManager.Instancia.IniciarInspeccion(_cuadroActual);
+                }
+                return;
             }
         }
-        else
+
+        // Si el rayo toca el vacío u otra cosa, limpiamos el rastro
+        if (_cuadroActual != null)
         {
-            // Si el rayo ya no choca con nada, apagamos el cuadro actual
-            if (_cuadroActual != null)
-            {
-                _cuadroActual.QuitarMirada();
-                _cuadroActual = null;
-            }
+            _cuadroActual.QuitarMirada();
+            _cuadroActual = null;
+            Debug.Log("<color=red>[Raycast]</color> Selección limpia. Ningún objeto activo.");
         }
-    }
-
-    private void OnDrawGizmos()
-    {
-        // Si el script está encontrando un cuadro, pinta el láser verde. Si no, rojo.
-        Gizmos.color = (_cuadroActual != null) ? Color.green : Color.red;
-
-        // Dibuja la línea desde la cámara hacia adelante con el límite exacto de la distancia
-        Gizmos.DrawRay(transform.position, transform.forward * _distanciaMaxima);
     }
 }
