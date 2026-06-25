@@ -1,0 +1,54 @@
+using System;
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+public class InputReader : MonoBehaviour, DioramaInputActions.IMouseActionsActions
+{
+    private DioramaInputActions _inputActions;
+
+    // --- EVENTOS PÚBLICOS ---
+    public event Action<bool> OnClickStateChanged;
+    public event Action<Vector2> OnMouseMoved;
+    public event Action<Vector2> OnMouseScroll;
+    public event Action OnInteractPressed; 
+
+    private void Awake()
+    {
+        if (_inputActions == null)
+        {
+            _inputActions = new DioramaInputActions();
+            _inputActions.MouseActions.SetCallbacks(this);
+        }
+    }
+
+    private void OnEnable() => _inputActions.MouseActions.Enable();
+    private void OnDisable() => _inputActions.MouseActions.Disable();
+
+    // 1. Interacción: Click
+    public void OnClick(InputAction.CallbackContext context)
+    {
+        if (context.started) OnClickStateChanged?.Invoke(true);
+        if (context.canceled) OnClickStateChanged?.Invoke(false);
+    }
+
+    // 2. Interacción: Point
+    public void OnPoint(InputAction.CallbackContext context)
+    {
+        if (context.performed) OnMouseMoved?.Invoke(context.ReadValue<Vector2>());
+    }
+
+    // 3. Interacción: Scroll
+    public void OnScroll(InputAction.CallbackContext context)
+    {
+        if (context.performed) OnMouseScroll?.Invoke(context.ReadValue<Vector2>());
+    }
+
+    // 4. Interacción: Interact (Tecla E)
+    public void OnInteract(InputAction.CallbackContext context)
+    {
+        if (context.started) 
+        {
+            OnInteractPressed?.Invoke();
+        }
+    }
+}
