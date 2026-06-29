@@ -2,47 +2,41 @@ using UnityEngine;
 
 public class InspectionManager : MonoBehaviour
 {
-    // SINGLETON: Para que DetectorInteraccion pueda saber el estado del mánager
     public static InspectionManager Instancia { get; private set; }
 
     [Header("Referencias Centrales")]
     [SerializeField] private InputReader inputReader;
     [SerializeField] private Transform puntoInspeccion;
 
+    [Header("Aislamiento del Entorno")]
+    [SerializeField] private GameObject estructuraVisualHabitacion; // Aquí va _DioramaRoot
+
     [Header("Configuración de Manipulación")]
-    [SerializeField] private float velocidadRotacion = 0.4f;
+    [SerializeField] private float velocidadRotacion = 0.25f;
     [SerializeField] private float velocidadEscala = 0.05f;
 
     private Cuadro _objetoActual;
     private bool _enModoInspeccion = false;
     private bool _mouseClickeado = false;
-    private float _lastMouseX;
+    private Vector2 _lastMousePosition;
     private Vector3 _escalaObjetivo;
+    private Camera _mainCamera;
 
-    // Propiedad pública para bloquear el Raycast externo
     public bool EnModoInspeccion => _enModoInspeccion;
 
     private void Awake()
     {
-        if (Instancia == null) Instancia = this;
-        else Destroy(gameObject);
-    }
-
-    private void Start()
-    {
-        if (inputReader != null)
+        if (Instancia == null)
         {
-            inputReader.OnClickStateChanged += ActivarRotacionMouse;
-            inputReader.OnMouseMoved += RotarObjeto;
-            inputReader.OnMouseScroll += EscalarObjeto;
-            inputReader.OnInteractPressed += EscucharTeclasInpseccion;
+            Instancia = this;
+            _mainCamera = Camera.main;
         }
-
-        if (MuseumUIManager.Instancia != null)
+        else
         {
-            MuseumUIManager.Instancia.OnUIClosed += TerminarInspeccion;
+            Destroy(gameObject);
         }
     }
+
     private void OnEnable()
     {
         if (inputReader != null)
@@ -50,7 +44,7 @@ public class InspectionManager : MonoBehaviour
             inputReader.OnClickStateChanged += ActivarRotacionMouse;
             inputReader.OnMouseMoved += RotarObjeto;
             inputReader.OnMouseScroll += EscalarObjeto;
-            inputReader.OnInteractPressed += EscucharTeclasInpseccion;
+            inputReader.OnInteractPressed += EscucharTeclasInspeccion; // <--- CABLE RE-CONECTADO
         }
 
         if (MuseumUIManager.Instancia != null)
@@ -66,7 +60,7 @@ public class InspectionManager : MonoBehaviour
             inputReader.OnClickStateChanged -= ActivarRotacionMouse;
             inputReader.OnMouseMoved -= RotarObjeto;
             inputReader.OnMouseScroll -= EscalarObjeto;
-            inputReader.OnInteractPressed -= EscucharTeclasInpseccion;
+            inputReader.OnInteractPressed -= EscucharTeclasInspeccion; // <--- LIMPIEZA DE EVENTO
         }
 
         if (MuseumUIManager.Instancia != null)
@@ -74,6 +68,8 @@ public class InspectionManager : MonoBehaviour
             MuseumUIManager.Instancia.OnUIClosed -= TerminarInspeccion;
         }
     }
+
+    private void ActivarRotacionMouse(bool estaPresionado) => _mouseClickeado = estaPresionado;
 
     public void IniciarInspeccion(Cuadro objetoTocado)
     {
@@ -83,7 +79,11 @@ public class InspectionManager : MonoBehaviour
         _enModoInspeccion = true;
         _escalaObjetivo = _objetoActual.transform.localScale;
 
-        // Apagamos colisionador para la manipulación
+        if (estructuraVisualHabitacion != null)
+        {
+            estructuraVisualHabitacion.SetActive(false);
+        }
+
         if (_objetoActual.TryGetComponent<Collider>(out var col)) col.enabled = false;
     }
 
@@ -98,18 +98,24 @@ public class InspectionManager : MonoBehaviour
         _objetoActual.transform.localScale = Vector3.Lerp(_objetoActual.transform.localScale, _escalaObjetivo, Time.deltaTime * 8f);
     }
 
-    private void ActivarRotacionMouse(bool estaPresionado) => _mouseClickeado = estaPresionado;
-
     private void RotarObjeto(Vector2 mousePosition)
     {
         if (!_enModoInspeccion || !_mouseClickeado || _objetoActual == null)
         {
-            _lastMouseX = mousePosition.x;
+            _lastMousePosition = mousePosition;
             return;
         }
-        float deltaX = mousePosition.x - _lastMouseX;
-        _objetoActual.transform.Rotate(Vector3.up, -deltaX * velocidadRotacion, Space.World);
-        _lastMouseX = mousePosition.x;
+
+        float deltaX = mousePosition.x - _lastMousePosition.x;
+        float deltaY = mousePosition.y - _lastMousePosition.y;
+
+        if (_mainCamera != null)
+        {
+            _objetoActual.transform.Rotate(_mainCamera.transform.up, -deltaX * velocidadRotacion, Space.World);
+            _objetoActual.transform.Rotate(_mainCamera.transform.right, deltaY * velocidadRotacion, Space.World);
+        }
+
+        _lastMousePosition = mousePosition;
     }
 
     private void EscalarObjeto(Vector2 scrollDelta)
@@ -128,10 +134,12 @@ public class InspectionManager : MonoBehaviour
         _escalaObjetivo = nuevaEscala;
     }
 
-    private void EscucharTeclasInpseccion()
+    
+    private void EscucharTeclasInspeccion()
     {
-        if (_enModoInspeccion && _objetoActual != null)
+        if (_enModoInspeccion && _objetoActual != null && MuseumUIManager.Instancia != null)
         {
+            Debug.Log("<color=green>[Mánager]</color> Tecla E detectada. Abriendo ficha técnica.");
             MuseumUIManager.Instancia.MostrarFicha(_objetoActual);
         }
     }
@@ -140,12 +148,17 @@ public class InspectionManager : MonoBehaviour
     {
         if (_objetoActual == null) return;
 
-        // Regresa seguro a sus coordenadas iniciales
+        // Encendemos el entorno al salir
+        if (estructuraVisualHabitacion != null)
+        {
+            estructuraVisualHabitacion.SetActive(true);
+        }
+
+        // Retorno limpio a las variables nativas de tu componente
         _objetoActual.transform.position = _objetoActual.PosicionOriginal;
         _objetoActual.transform.rotation = _objetoActual.RotacionOriginal;
         _objetoActual.transform.localScale = _objetoActual.EscalaOriginal;
 
-        // Devolvemos el colisionador para futuros clics
         if (_objetoActual.TryGetComponent<Collider>(out var col)) col.enabled = true;
 
         _objetoActual = null;
